@@ -1,6 +1,6 @@
 import React from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from 'firebase/auth';
+import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { getFirestore, doc, setDoc, onSnapshot, collection, addDoc, query, getDocs, deleteDoc, where, writeBatch } from 'firebase/firestore';
 // Recharts is a charting library that will be used for the analysis page.
 // We are assuming it is available in the environment.
@@ -8,15 +8,17 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 
 
 // --- Firebase Configuration ---
-// This configuration is automatically populated by the environment.
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_AUTH_DOMAIN",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_STORAGE_BUCKET",
-    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-    appId: "YOUR_APP_ID"
+// Your web app's Firebase configuration
+const firebaseConfig = {
+    apiKey: "AIzaSyD9P3oJjd2HVCRIH2xJVwGFnoIkKjaJcFs",
+    authDomain: "renfincal.firebaseapp.com",
+    projectId: "renfincal",
+    storageBucket: "renfincal.appspot.com",
+    messagingSenderId: "968384243853",
+    appId: "1:968384243853:web:940460e10130255a61dac4",
+    measurementId: "G-JKXQ840NEL"
 };
+
 
 // --- App ID ---
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'renfincal-app';
@@ -31,6 +33,63 @@ const getCutoffDate = (months) => {
     const date = new Date();
     date.setMonth(date.getMonth() - months);
     return date;
+};
+
+
+// --- Login Page Component ---
+const LoginPage = () => {
+    const [email, setEmail] = React.useState('');
+    const [password, setPassword] = React.useState('');
+    const [error, setError] = React.useState('');
+    const [isSignUp, setIsSignUp] = React.useState(false);
+
+    const handleAuthAction = async (e) => {
+        e.preventDefault();
+        setError('');
+        try {
+            if (isSignUp) {
+                await createUserWithEmailAndPassword(auth, email, password);
+            } else {
+                await signInWithEmailAndPassword(auth, email, password);
+            }
+        } catch (err) {
+            setError(err.message);
+        }
+    };
+
+    return (
+        <div className="flex items-center justify-center min-h-screen bg-gray-900">
+            <div className="w-full max-w-md p-8 space-y-8 bg-gray-800 rounded-lg shadow-lg">
+                <div>
+                    <h2 className="text-3xl font-extrabold text-center text-white">
+                        {isSignUp ? 'Create an Account' : 'Sign in to Renfincal'}
+                    </h2>
+                </div>
+                <form className="mt-8 space-y-6" onSubmit={handleAuthAction}>
+                    <div className="rounded-md shadow-sm -space-y-px">
+                        <div>
+                            <input id="email-address" name="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full px-3 py-2 mb-3 text-white bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-cyan-500 focus:border-cyan-500" placeholder="Email address" />
+                        </div>
+                        <div>
+                            <input id="password" name="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="w-full px-3 py-2 text-white bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-cyan-500 focus:border-cyan-500" placeholder="Password" />
+                        </div>
+                    </div>
+                    {error && <p className="text-sm text-center text-red-500">{error}</p>}
+                    <div>
+                        <button type="submit" className="w-full py-3 mt-4 font-medium text-white bg-cyan-600 rounded-md hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500">
+                            {isSignUp ? 'Sign Up' : 'Sign In'}
+                        </button>
+                    </div>
+                </form>
+                <p className="mt-2 text-sm text-center text-gray-400">
+                    {isSignUp ? 'Already have an account?' : "Don't have an account?"}
+                    <button onClick={() => setIsSignUp(!isSignUp)} className="ml-1 font-medium text-cyan-400 hover:text-cyan-300">
+                        {isSignUp ? 'Sign In' : 'Sign Up'}
+                    </button>
+                </p>
+            </div>
+        </div>
+    );
 };
 
 
@@ -61,21 +120,10 @@ export default function App() {
     }, []);
 
     // --- Authentication ---
-    // This effect handles user authentication state changes.
+    // This effect now just checks if a user is logged in or not.
     React.useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-            if (currentUser) {
-                setUser(currentUser);
-            } else {
-                try {
-                    // Sign in with a custom token if available, otherwise sign in anonymously.
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        await signInWithCustomToken(auth, __initial_auth_token);
-                    } else {
-                        await signInAnonymously(auth);
-                    }
-                } catch (error) { console.error("Authentication Error:", error); }
-            }
+        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+            setUser(currentUser);
             setIsAuthReady(true);
         });
         return () => unsubscribe();
@@ -150,17 +198,21 @@ export default function App() {
 
 
     // --- Render Logic ---
-    // Show a loading screen while authentication is in progress.
-    if (!isAuthReady || !user) {
+    // If auth is not ready, show a loading message.
+    if (!isAuthReady) {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white">
-                <h2 className="text-2xl font-semibold">Authenticating...</h2>
-                <p className="mt-2 text-gray-400">Please wait while we securely log you in.</p>
+                <h2 className="text-2xl font-semibold">Loading Renfincal...</h2>
             </div>
         );
     }
+    
+    // If auth is ready but there is no user, show the LoginPage.
+    if (!user) {
+        return <LoginPage />;
+    }
 
-    // Renders the component corresponding to the current page state.
+    // If a user is logged in, show the main application.
     const renderPage = () => {
         switch (page) {
             case 'dashboard': return <Dashboard transactions={transactions} budgets={budgets} incomes={incomes} liabilities={liabilities} assets={assets} selectedDate={selectedDate} setSelectedDate={setSelectedDate} currencyRates={currencyRates} />;
@@ -180,6 +232,14 @@ export default function App() {
 
 // --- Header Component (Memoized) ---
 const Header = React.memo(function Header({ setPage, user }) {
+    const handleLogout = async () => {
+        try {
+            await signOut(auth);
+        } catch (error) {
+            console.error("Error signing out: ", error);
+        }
+    };
+
     return (
         <header className="mb-8">
             <div className="flex flex-wrap justify-between items-center">
@@ -191,9 +251,10 @@ const Header = React.memo(function Header({ setPage, user }) {
                     <button onClick={() => setPage('budget')} className="px-3 py-2 text-sm md:text-base rounded-md hover:bg-gray-700 transition">Budget</button>
                     <button onClick={() => setPage('recurring')} className="px-3 py-2 text-sm md:text-base rounded-md hover:bg-gray-700 transition">Recurring</button>
                     <button onClick={() => setPage('analysis')} className="px-3 py-2 text-sm md:text-base rounded-md hover:bg-gray-700 transition">Analysis</button>
+                    <button onClick={handleLogout} className="px-3 py-2 text-sm md:text-base rounded-md bg-red-600 hover:bg-red-700 transition">Logout</button>
                 </nav>
             </div>
-            {user && <p className="text-xs text-gray-500 mt-2">User ID: {user.uid}</p>}
+            {user && <p className="text-xs text-gray-500 mt-2">User: {user.email}</p>}
         </header>
     );
 });
